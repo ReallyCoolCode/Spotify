@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Spotify</title>
+    <style>
+        body {
+            background: #111;
+            color: #eee;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            overflow: hidden;
+        }
+        #splash {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        #splash img {
+            width: 150px;
+        }
+        header {
+            background: linear-gradient(#2e2e2e, #1a1a1a);
+            padding: 10px;
+            border-bottom: 1px solid #000;
+            display: flex;
+            align-items: center;
+        }
+        header img {
+            height: 40px;
+        }
+        #main {
+            display: flex;
+            height: calc(100vh - 60px);
+        }
+        #menu {
+            width: 200px;
+            background: #1c1c1c;
+            border-right: 1px solid #333;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        #content {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+        }
+        .menu-item, .playlist-item, .control-button {
+            background: #222;
+            padding: 10px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            border: 1px solid #333;
+            cursor: pointer;
+        }
+        .focused {
+            border: 1px solid #1db954;
+            background: #333;
+        }
+        .playlist-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .control-button {
+            background: #1db954;
+            color: #fff;
+            border: none;
+            margin-left: 10px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="splash">
+    <img src="https://www.scdn.co/i/_global/logo.png" alt="Spotify">
+</div>
+
+<header>
+    <img src="https://www.scdn.co/i/_global/logo.png" alt="Spotify">
+</header>
+
+<div id="main">
+    <div id="menu">
+        <div class="menu-item" data-action="playlists">My Playlists</div>
+        <div class="menu-item" data-action="search">Search</div>
+    </div>
+    <div id="content">
+        <div id="contentArea"></div>
+    </div>
+</div>
+
+<script>
+    const clientId = '877a83359117400a962e4bf9c0480c39';
+    const redirectUri = window.location.origin + window.location.pathname;
+    let token = null;
+    let focusableElements = [];
+    let focusIndex = 0;
+
+    function hideSplash() {
+        document.getElementById('splash').style.display = 'none';
+    }
+
+    window.addEventListener('load', () => {
+        setTimeout(hideSplash, 2000);
+    });
+
+    function focusElements() {
+        focusableElements.forEach((el, idx) => {
+            el.classList.toggle('focused', idx === focusIndex);
+        });
+        if (focusableElements[focusIndex]) focusableElements[focusIndex].focus();
+    }
+
+    function refreshFocusableElements() {
+        focusableElements = Array.from(document.querySelectorAll('.menu-item, .playlist-item, .control-button'));
+        focusIndex = 0;
+        focusElements();
+    }
+
+    function setupNavigation() {
+        focusElements();
+        window.addEventListener('keydown', e => {
+            if (['ArrowDown', 'ArrowUp', 'Enter'].includes(e.key)) e.preventDefault();
+            if (e.key === 'ArrowDown') {
+                focusIndex = (focusIndex + 1) % focusableElements.length;
+                focusElements();
+            } else if (e.key === 'ArrowUp') {
+                focusIndex = (focusIndex - 1 + focusableElements.length) % focusableElements.length;
+                focusElements();
+            } else if (e.key === 'Enter') {
+                focusableElements[focusIndex].click();
+            }
+        });
+    }
+
+    function getToken() {
+        const hash = window.location.hash;
+        if (hash.includes('access_token')) {
+            token = new URLSearchParams(hash.substring(1)).get('access_token');
+        } else {
+            const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=playlist-read-private user-modify-playback-state user-read-playback-state`;
+            window.location.href = authUrl;
+        }
+    }
+
+    function handleMenuClicks() {
+        document.querySelectorAll('.menu-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const action = item.dataset.action;
+                const content = document.getElementById('contentArea');
+                content.innerHTML = '';
+                if (action === 'playlists') {
+                    loadPlaylists();
+                } else if (action === 'search') {
+                    content.innerHTML = '<h3>Search (Not implemented)</h3>';
+                    refreshFocusableElements();
+                }
+            });
+        });
+    }
+
+    async function loadPlaylists() {
+        const content = document.getElementById('contentArea');
+        content.innerHTML = '<h3>My Playlists</h3><div id="playlistList"></div>';
+        const res = await fetch('https://api.spotify.com/v1/me/playlists', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        const list = document.getElementById('playlistList');
+        data.items.forEach(pl => {
+            const div = document.createElement('div');
+            div.className = 'playlist-item';
+            div.tabIndex = 0;
+            div.innerHTML = `<span>${pl.name}</span>`;
+            const btn = document.createElement('div');
+            btn.className = 'control-button';
+            btn.textContent = 'Play';
+            btn.dataset.uri = pl.uri;
+            btn.addEventListener('click', () => togglePlayPause(btn));
+            div.appendChild(btn);
+            list.appendChild(div);
+        });
+        refreshFocusableElements();
+    }
+
+    async function togglePlayPause(button) {
+        const stateRes = await fetch('https://api.spotify.com/v1/me/player', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const state = await stateRes.json();
+        if (state && state.is_playing && state.context && state.context.uri === button.dataset.uri) {
+            await fetch('https://api.spotify.com/v1/me/player/pause', {
+                method: 'PUT',
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            button.textContent = 'Play';
+        } else {
+            await fetch('https://api.spotify.com/v1/me/player/play', {
+                method: 'PUT',
+                headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ context_uri: button.dataset.uri })
+            });
+            button.textContent = 'Pause';
+        }
+    }
+
+    getToken();
+    setupNavigation();
+    handleMenuClicks();
+</script>
+
+</body>
+</html>
