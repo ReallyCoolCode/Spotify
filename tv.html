@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>eSDK TV App</title>
+  <link rel="icon" href="https://spotify.com/favicon.ico" type="image/x-icon">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(to bottom, #121212, #282828);
+      font-family: 'Lucida Grande', Tahoma, Calibri, Arial, sans-serif;
+      color: #fff;
+      overflow: hidden;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 32px;
+      background-color: #000;
+      border-bottom: 1px solid #333;
+    }
+
+    .logo {
+      height: 40px;
+    }
+
+    .sign-out-btn {
+      padding: 9px 12px;
+      font-size: 16px;
+      font-weight: bold;
+      color: #fff;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 0, 0, 0.2);
+      background: linear-gradient(to bottom, #7ab800 0%, #549a00 100%);
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3);
+      cursor: pointer;
+    }
+
+    .sign-out-btn:hover {
+      background: linear-gradient(to bottom, #4e8700 0%, #3e7200 100%);
+    }
+
+    .content {
+      padding: 24px 32px;
+      height: calc(100vh - 100px);
+      overflow-y: auto;
+    }
+
+    .track {
+      display: flex;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid #444;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .track.selected {
+      background-color: #1db95422;
+    }
+
+    .track img {
+      width: 50px;
+      height: 50px;
+      margin-right: 16px;
+      background: #000;
+    }
+
+    .track-details {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .track-title,
+    .track-artist {
+      font-size: 14px;
+      height: 1em;
+    }
+
+    .now-playing {
+      position: fixed;
+      bottom: 12px;
+      left: 16px;
+      font-size: 14px;
+      color: #ccc;
+      opacity: 0.9;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <img class="logo" src="https://www.scdn.co/i/_global/logo.png" alt="Spotify Logo">
+    <button class="sign-out-btn" id="signOutBtn">Sign Out</button>
+  </header>
+
+  <div class="content" id="trackList"></div>
+
+  <div class="now-playing" id="nowPlaying"> </div>
+
+  <audio id="audioPlayer" controls style="display:none;"></audio>
+
+  <script>
+    const trackList = document.getElementById('trackList');
+    const nowPlaying = document.getElementById('nowPlaying');
+    const audioPlayer = document.getElementById('audioPlayer');
+    const signOutBtn = document.getElementById('signOutBtn');
+
+    let selectedIndex = 0;
+    let allTracks = [];
+
+    function renderTracks(tracks) {
+      tracks.forEach((item, index) => {
+        const track = item.track || item;
+        const name = track.name || '';
+        const artist = (track.artists && track.artists[0] && track.artists[0].name) || '';
+        const image = (track.album && track.album.images && track.album.images[2] && track.album.images[2].url) || '';
+        const preview = track.preview_url || '';
+
+        const trackDiv = document.createElement('div');
+        trackDiv.classList.add('track');
+        if (index === 0) trackDiv.classList.add('selected');
+        trackDiv.tabIndex = 0;
+        trackDiv.dataset.index = index;
+        trackDiv.dataset.title = name;
+        trackDiv.dataset.artist = artist;
+        trackDiv.dataset.preview = preview;
+
+        trackDiv.innerHTML = `
+          <img src="${image}" alt="">
+          <div class="track-details">
+            <span class="track-title">${name}</span>
+            <span class="track-artist">${artist}</span>
+          </div>
+        `;
+
+        trackList.appendChild(trackDiv);
+        allTracks.push(trackDiv);
+      });
+
+      updateSelection();
+    }
+
+    function updateSelection() {
+      allTracks.forEach((el, i) => {
+        el.classList.toggle('selected', i === selectedIndex);
+        if (i === selectedIndex) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      });
+
+      if (selectedIndex === -1) {
+        signOutBtn.focus();
+      } else {
+        allTracks[selectedIndex].focus();
+      }
+    }
+
+    function playTrack(track) {
+      const title = track.dataset.title;
+      const artist = track.dataset.artist;
+      const preview = track.dataset.preview;
+
+      nowPlaying.textContent = `Now playing: ${title} — ${artist}`;
+
+      if (preview) {
+        audioPlayer.src = preview;
+        audioPlayer.play().catch(() => {});
+      } else {
+        audioPlayer.pause();
+        audioPlayer.src = '';
+      }
+
+      setTimeout(() => {
+        window.location.href = 'index.html';
+      }, 1000);
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') {
+        if (selectedIndex < allTracks.length - 1) {
+          selectedIndex++;
+          updateSelection();
+        }
+      } else if (e.key === 'ArrowUp') {
+        if (selectedIndex > -1) {
+          selectedIndex--;
+          updateSelection();
+        }
+      } else if (e.key === 'Enter') {
+        if (selectedIndex === -1) {
+          window.location.href = 'index.html';
+        } else {
+          playTrack(allTracks[selectedIndex]);
+        }
+      }
+    });
+
+    signOutBtn.addEventListener('click', () => {
+      window.location.href = 'index.html';
+    });
+
+    fetch('https://api.spotify.com/v1/playlists/37i9dQZF1DXcBWIGoYBM5M')
+      .then(res => res.json())
+      .then(data => {
+        const items = data.tracks?.items || [];
+        renderTracks(items);
+      })
+      .catch(() => {});
+  </script>
+
+</body>
+</html>
